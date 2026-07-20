@@ -4,6 +4,7 @@ import numpy as np
 import os
 import json
 import requests
+import time
 from io import BytesIO
 from datetime import datetime, timedelta, date
 import openpyxl
@@ -34,7 +35,8 @@ def load_auth():
                     default_auth["users"][saved["username"]] = saved["password"]
                 elif "users" in saved and isinstance(saved["users"], dict):
                     default_auth["users"].update(saved["users"])
-        except Exception: pass
+        except Exception:
+            pass
     else:
         with open(AUTH_FILE, 'w', encoding='utf-8') as f:
             json.dump(default_auth, f, ensure_ascii=False, indent=4)
@@ -49,7 +51,6 @@ if "logged_in" not in st.session_state:
 if "current_user" not in st.session_state:
     st.session_state["current_user"] = ""
 
-# Captcha (Gerçek İnsan Doğrulaması) için rastgele matematik sorusu oluşturma
 if "captcha_num1" not in st.session_state or "captcha_num2" not in st.session_state:
     st.session_state["captcha_num1"] = np.random.randint(1, 10)
     st.session_state["captcha_num2"] = np.random.randint(1, 10)
@@ -60,7 +61,7 @@ def reset_captcha():
 
 auth_data = load_auth()
 
-# Özel CSS - Temiz, Profesyonel ve Canlı Tasarım
+# Özel CSS
 st.markdown("""
     <style>
     .main-title { font-size: 30px; font-weight: bold; color: #E74C3C; margin-bottom: 5px; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
@@ -82,32 +83,25 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# GİRİŞ EKRANI (Eğer giriş yapılmadıysa sadece burası görünür)
 if not st.session_state["logged_in"]:
     st.markdown("<h1 style='text-align: center; color: #2C3E50; margin-top: 50px;'>🔐 E-Ticaret Otomasyon Girişi</h1>", unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.form("login_form"):
             st.markdown("### Lütfen Giriş Yapın")
             kadi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
-            
-            # Gerçek İnsan Doğrulaması (Güvenlik Sorusu)
             st.markdown("---")
-            st.markdown("#### 🛡️ Güvenlik Doğrulaması")
+            st.markdown("#### 🛡 Güvenlik Doğrulaması")
             num1 = st.session_state["captcha_num1"]
             num2 = st.session_state["captcha_num2"]
             captcha_ans = st.text_input(f"🤖 Gerçek insan olduğunuzu doğrulayın: {num1} + {num2} kaçtır?", placeholder="Sonucu buraya yazın")
-            
             submit = st.form_submit_button("🚀 Sisteme Giriş Yap", use_container_width=True)
-            
             if submit:
                 try:
                     user_ans = int(captcha_ans.strip())
                 except ValueError:
                     user_ans = -1
-                    
                 if user_ans != (num1 + num2):
                     st.error("❌ Güvenlik sorusunu (doğrulama kodunu) yanlış cevapladınız. Lütfen tekrar deneyin!")
                     reset_captcha()
@@ -123,9 +117,9 @@ if not st.session_state["logged_in"]:
 
 # --- YARDIMCI FONKSİYONLAR ---
 def turkce_tarih_format(dt_obj):
-    if pd.isna(dt_obj): return ""
-    aylar = {1: "Ocak", 2: "Şubat", 3: "Mart", 4: "Nisan", 5: "Mayıs", 6: "Haziran", 
-             7: "Temmuz", 8: "Ağustos", 9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık"}
+    if pd.isna(dt_obj):
+        return ""
+    aylar = {1: "Ocak", 2: "Şubat", 3: "Mart", 4: "Nisan", 5: "Mayıs", 6: "Haziran", 7: "Temmuz", 8: "Ağustos", 9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık"}
     return f"{dt_obj.day} {aylar.get(dt_obj.month, '')} {dt_obj.year} {dt_obj.strftime('%H:%M')}"
 
 def tablayi_1den_baslat(df):
@@ -135,20 +129,31 @@ def tablayi_1den_baslat(df):
     return df_copy
 
 def temizle_ve_sayiya_donustur(val):
-    if pd.isna(val): return 0.0
-    if isinstance(val, (int, float)): return float(val)
+    if pd.isna(val):
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
     val_str = str(val).strip()
-    if not val_str: return 0.0
+    if not val_str:
+        return 0.0
     if '.' in val_str and ',' in val_str:
-        if val_str.rfind('.') > val_str.rfind(','): val_str = val_str.replace(',', '')
-        else: val_str = val_str.replace('.', '').replace(',', '.')
-    elif ',' in val_str: val_str = val_str.replace(',', '.')
-    try: return float(val_str)
-    except ValueError: return 0.0
+        if val_str.rfind('.') > val_str.rfind(','):
+            val_str = val_str.replace(',', '')
+        else:
+            val_str = val_str.replace('.', '').replace(',', '.')
+    elif ',' in val_str:
+        val_str = val_str.replace(',', '.')
+    try:
+        return float(val_str)
+    except ValueError:
+        return 0.0
 
 def load_db():
     if os.path.exists(DB_FILE):
-        return pd.read_csv(DB_FILE, dtype={'Barkod': str})
+        try:
+            return pd.read_csv(DB_FILE, dtype={'Barkod': str})
+        except Exception:
+            return pd.DataFrame(columns=['Barkod', 'Ürün Adı', 'Maliyet (TL)', 'Kargo (TL)', 'Komisyon (%)'])
     return pd.DataFrame(columns=['Barkod', 'Ürün Adı', 'Maliyet (TL)', 'Kargo (TL)', 'Komisyon (%)'])
 
 def find_default_col(options, keywords, exclude_keywords=None):
@@ -161,28 +166,26 @@ def find_default_col(options, keywords, exclude_keywords=None):
     return 0
 
 def load_api_settings():
-    default_settings = {
-        "ty_seller_id": "", "ty_api_key": "", "ty_api_secret": ""
-    }
+    default_settings = {"ty_seller_id": "", "ty_api_key": "", "ty_api_secret": ""}
     if os.path.exists(API_FILE):
         try:
             with open(API_FILE, 'r', encoding='utf-8') as f:
                 saved = json.load(f)
                 default_settings.update(saved)
-        except Exception: pass
+        except Exception:
+            pass
     return default_settings
 
 def save_api_settings(settings):
     with open(API_FILE, 'w', encoding='utf-8') as f:
         json.dump(settings, f, ensure_ascii=False, indent=4)
 
-# --- TRENDYOL API İSTEK FONKSİYONLARI ---
+# --- TRENDYOL API İSTEK FONKSİYONLARI - DÜZELTİLDİ ---
 def ty_api_request(url, method="GET", payload=None):
     api = load_api_settings()
     if not api["ty_seller_id"] or not api["ty_api_key"] or not api["ty_api_secret"]:
-        st.error("❌ Trendyol API bilgileri bulunamadı! Lütfen sol menüdeki '⚙️ Ayarlar & API' bölümünden bilgilerinizi bir kere kaydedin.")
+        st.error("❌ Trendyol API bilgileri bulunamadı! Lütfen sol menüdeki '⚙ Ayarlar & API' bölümünden bilgilerinizi bir kere kaydedin.")
         return None
-    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "Content-Type": "application/json",
@@ -190,53 +193,82 @@ def ty_api_request(url, method="GET", payload=None):
     }
     auth = (api["ty_api_key"], api["ty_api_secret"])
     try:
-        if method == "GET": response = requests.get(url, headers=headers, auth=auth, timeout=20)
-        elif method == "POST": response = requests.post(url, headers=headers, auth=auth, json=payload, timeout=20)
-        elif method == "PUT": response = requests.put(url, headers=headers, auth=auth, json=payload, timeout=20)
+        if method == "GET":
+            response = requests.get(url, headers=headers, auth=auth, timeout=30)
+        elif method == "POST":
+            response = requests.post(url, headers=headers, auth=auth, json=payload, timeout=30)
+        elif method == "PUT":
+            response = requests.put(url, headers=headers, auth=auth, json=payload, timeout=30)
         
-        if response.status_code in [200, 201]: 
+        if response.status_code in [200, 201]:
             return response.json()
+        elif response.status_code == 429:
+            st.warning("⏳ Trendyol rate limit (429), 2 saniye bekleniyor...")
+            time.sleep(2)
+            return None
         elif response.status_code == 403:
-            st.error("❌ Trendyol (403 Forbidden): Trendyol API güvenlik duvarına takıldınız. Lütfen bu kodu kendi bilgisayarınızda (lokal) çalıştırın.")
+            st.error("❌ Trendyol (403 Forbidden): API güvenlik duvarına takıldınız. Lütfen bu kodu kendi bilgisayarınızda (lokal) çalıştırın.")
             return None
         else:
-            st.error(f"❌ Trendyol API Hatası ({response.status_code}): {response.text}")
+            st.error(f"❌ Trendyol API Hatası ({response.status_code}): {response.text[:500]}")
             return None
     except Exception as e:
         st.error(f"❌ Bağlantı Hatası: {str(e)}")
         return None
 
 def fetch_ty_orders(start_dt, end_dt):
+    """DÜZELTİLDİ - Canlı satışları eksiksiz çekmek için pagination ve tarih mantığı tamamen yenilendi"""
     api = load_api_settings()
     all_orders = []
     current_start = start_dt
     
+    progress_bar = st.progress(0, text="Siparişler çekiliyor...")
+    total_seconds = (end_dt - start_dt).total_seconds()
+    if total_seconds <= 0:
+        total_seconds = 1
+
     while current_start < end_dt:
         current_end = min(current_start + timedelta(days=14), end_dt)
         start_ts = int(current_start.timestamp() * 1000)
         end_ts = int(current_end.timestamp() * 1000)
         
-        url = f"https://api.trendyol.com/sapigw/suppliers/{api['ty_seller_id']}/orders?startDate={start_ts}&endDate={end_ts}&size=200"
-        data = ty_api_request(url)
-        if data and "content" in data:
-            all_orders.extend(data["content"])
+        page = 0
+        while True:
+            url = f"https://api.trendyol.com/sapigw/suppliers/{api['ty_seller_id']}/orders?startDate={start_ts}&endDate={end_ts}&size=200&page={page}"
+            data = ty_api_request(url)
             
-            total_elements = data.get("totalElements", 0)
-            page = 0
-            while len(all_orders) < total_elements and len(data["content"]) == 200:
-                page += 1
-                url_page = f"{url}&page={page}"
-                data_page = ty_api_request(url_page)
-                if data_page and "content" in data_page:
-                    all_orders.extend(data_page["content"])
-                else: break
-                
+            if not data:
+                time.sleep(1)
+                data = ty_api_request(url)
+                if not data:
+                    break
+
+            content = data.get("content", [])
+            if not content:
+                break
+            
+            all_orders.extend(content)
+            
+            # Düzgün bitiş kontrolü - 2 koşuldan biri olursa son sayfa
+            if len(content) < 200:
+                break
+            total_pages = data.get("totalPages")
+            if total_pages is not None and page >= total_pages - 1:
+                break
+            
+            page += 1
+            time.sleep(0.35)  # Rate limit koruması
+        
+        # Progress güncelle
+        elapsed = (current_end - start_dt).total_seconds()
+        progress_bar.progress(min(elapsed / total_seconds, 1.0), text=f"{len(all_orders)} sipariş çekildi...")
         current_start = current_end
         
+    progress_bar.empty()
     return all_orders
 
 # --- YAN MENÜ ---
-st.sidebar.markdown("<h2 style='text-align: center; color: #E74C3C;'>🏷️ Avantajlı Ürün</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='text-align: center; color: #E74C3C;'>🏷 Avantajlı Ürün</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='text-align: center; color: #2ECC71; font-weight: bold;'>Fiyatlandırma & Satış Sistemi</p>", unsafe_allow_html=True)
 if st.session_state["current_user"]:
     st.sidebar.markdown(f"<p style='text-align: center; color: #555; font-size: 13px;'>👤 Aktif Kullanıcı: <b>{st.session_state['current_user']}</b></p>", unsafe_allow_html=True)
@@ -247,13 +279,15 @@ menu = st.sidebar.radio("Sayfa Seçimi:", [
     "🚀 Trendyol Yıldızlı Fiyat", 
     "💜 Hepsiburada Avantajlı Teklif",
     "📊 Trendyol Satış Analizi (API)",
-    "⚙️ Ayarlar & API"
+    "⚙ Ayarlar & API"
 ])
 st.sidebar.markdown("---")
 if st.sidebar.button("🔒 Çıkış Yap", use_container_width=True):
     st.session_state["logged_in"] = False
     st.session_state["current_user"] = ""
     reset_captcha()
+    if "ty_satis_raporu" in st.session_state:
+        del st.session_state["ty_satis_raporu"]
     st.rerun()
 
 # ==========================================
@@ -324,7 +358,6 @@ elif menu == "🧮 İdeal Fiyat Hesaplama":
                 
         st.markdown("---")
         
-        # Hesaplama mantığı
         if "Yüzdelik" in hesap_yontemi:
             toplam_kesinti_orani = (in_komisyon + in_hedef_val) / 100.0
             if toplam_kesinti_orani >= 1.0:
@@ -367,7 +400,7 @@ elif menu == "🧮 İdeal Fiyat Hesaplama":
         
         db = load_db()
         if db.empty:
-            st.warning("⚠️ Veritabanında kayıtlı ürün bulunmuyor. Önce sol menüdeki '📦 Maliyet Yönetimi' sayfasından ürün ekleyin.")
+            st.warning("⚠ Veritabanında kayıtlı ürün bulunmuyor. Önce sol menüdeki '📦 Maliyet Yönetimi' sayfasından ürün ekleyin.")
         else:
             col_b1, col_b2 = st.columns(2)
             with col_b1:
@@ -478,9 +511,10 @@ elif menu == "🚀 Trendyol Yıldızlı Fiyat":
             else:
                 with st.spinner("⏳ Fiyatlandırma senaryoları test ediliyor..."):
                     islem_df = df_kampanya.copy()
+                    db_copy = db.copy()
                     islem_df['_kamp_barkod'] = islem_df[barkod_col].astype(str).str.strip()
-                    db['_db_barkod'] = db['Barkod'].astype(str).str.strip()
-                    merge_df = pd.merge(islem_df, db, left_on='_kamp_barkod', right_on='_db_barkod', how='left')
+                    db_copy['_db_barkod'] = db_copy['Barkod'].astype(str).str.strip()
+                    merge_df = pd.merge(islem_df, db_copy, left_on='_kamp_barkod', right_on='_db_barkod', how='left')
                     
                     for col in [fiyat_1_yildiz, fiyat_2_yildiz, fiyat_3_yildiz]:
                         merge_df[col + '_num'] = merge_df[col].apply(temizle_ve_sayiya_donustur)
@@ -571,7 +605,7 @@ elif menu == "💜 Hepsiburada Avantajlı Teklif":
         else: df_kampanya = pd.read_excel(kampanya_file)
             
         cols = list(df_kampanya.columns)
-        st.write("#### ⚙️ Sütun Eşleştirme (Hepsiburada Formatı İçin)")
+        st.write("#### ⚙ Sütun Eşleştirme (Hepsiburada Formatı İçin)")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1: barkod_col = st.selectbox("Barkod / SKU Sütunu", cols, index=find_default_col(cols, ["barkod", "barcode", "sku", "stok", "merchant"]))
@@ -588,9 +622,10 @@ elif menu == "💜 Hepsiburada Avantajlı Teklif":
         if st.button("⚡ Otomatik Fiyatlandır (Hepsiburada)", use_container_width=True):
             with st.spinner("⏳ Hepsiburada teklifleri kârlılık testinden geçiriliyor..."):
                 islem_df = df_kampanya.copy()
+                db_copy = db.copy()
                 islem_df['_kamp_barkod'] = islem_df[barkod_col].astype(str).str.strip()
-                db['_db_barkod'] = db['Barkod'].astype(str).str.strip()
-                merge_df = pd.merge(islem_df, db, left_on='_kamp_barkod', right_on='_db_barkod', how='left')
+                db_copy['_db_barkod'] = db_copy['Barkod'].astype(str).str.strip()
+                merge_df = pd.merge(islem_df, db_copy, left_on='_kamp_barkod', right_on='_db_barkod', how='left')
                 
                 durum_list, hesaplanan_karlar, hesaplanan_marjlar, katilim_fiyati = [], [], [], []
                 for idx, row in merge_df.iterrows():
@@ -652,28 +687,28 @@ elif menu == "💜 Hepsiburada Avantajlı Teklif":
                 st.download_button(label="📥 Hepsiburada İçin Hazır Excel'i İndir", data=output, file_name="HB_Kampanya_Sonucu.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
 # ==========================================
-# SAYFA 5: TRENDYOL DETAYLI SATIŞ ANALİZİ (API)
+# SAYFA 5: TRENDYOL DETAYLI SATIŞ ANALİZİ (API) - CANLI DÜZELTİLDİ
 # ==========================================
 elif menu == "📊 Trendyol Satış Analizi (API)":
     st.markdown('<div class="sales-title">📊 Trendyol Detaylı Satış ve Kârlılık Analizi (API)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Sipariş Excel\'i indirmenize gerek yok! Anlık, Günlük, Haftalık, Aylık veya Yıllık tüm satışlarınızı doğrudan API ile çekin; masraflarınızı, net kârınızı ve en çok satan ürünlerinizi Türkçe tarih formatıyla ayrıntılı inceleyin.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Anlık, Günlük, Haftalık, Aylık veya Yıllık tüm satışlarınızı doğrudan API ile çekin. Canlı satışlar artık eksiksiz çekiliyor.</div>', unsafe_allow_html=True)
     
     db = load_db()
     if db.empty: st.error("❌ Veritabanı boş! Masrafları hesaplayabilmek için önce 'Maliyet Yönetimi' sayfasından maliyetlerinizi kaydetmelisiniz."); st.stop()
     
     api = load_api_settings()
     if not (api["ty_seller_id"] and api["ty_api_key"] and api["ty_api_secret"]):
-        st.warning("⚠️ Trendyol API bilgileri sistemde kayıtlı değil! Lütfen sol menüden **'⚙️ Ayarlar & API'** sekmesine giderek bilgilerinizi bir kez kaydedin.")
+        st.warning("⚠ Trendyol API bilgileri sistemde kayıtlı değil! Lütfen sol menüden **'⚙ Ayarlar & API'** sekmesine giderek bilgilerinizi bir kez kaydedin.")
         st.stop()
     
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    st.markdown("### 🗓️ Zaman ve Tarih Filtresi Seçimi")
+    st.markdown("### 🗓 Zaman ve Tarih Filtresi Seçimi")
     zaman_filtresi = st.radio("İncelemek İstediğiniz Dönemi Seçin:", [
         "⚡ Anlık / Bugün (Bugünün Satışları)",
         "📅 Günlük / Dün (Dünün Satışları)",
-        "🗓️ Haftalık (Son 7 Gün)",
+        "🗓 Haftalık (Son 7 Gün)",
         "📆 Aylık (Son 30 Gün)",
         "🚀 Yıllık (Bu Yıl - 1 Ocak'tan Bugüne)",
         "🔍 İki Tarih Arası (Özel Seçim)"
@@ -708,14 +743,18 @@ elif menu == "📊 Trendyol Satış Analizi (API)":
             orders = fetch_ty_orders(start_dt, end_dt)
             
             if orders:
-                db['_db_barkod'] = db['Barkod'].astype(str).str.strip()
+                db_copy = db.copy()
+                db_copy['_db_barkod'] = db_copy['Barkod'].astype(str).str.strip()
                 siparis_detaylari = []
                 
                 for order in orders:
                     order_ts = order.get("orderDate", 0) / 1000
-                    order_dt = datetime.fromtimestamp(order_ts)
-                    if not (start_dt <= order_dt <= end_dt): continue
+                    try:
+                        order_dt = datetime.fromtimestamp(order_ts)
+                    except:
+                        continue
                     
+                    # API zaten tarih aralığını filtreledi, canlı veriyi kaçırmamak için ikinci filtre kaldırıldı
                     sip_tarihi_str = turkce_tarih_format(order_dt)
                     siparis_no = order.get("orderNumber", "")
                     
@@ -723,10 +762,10 @@ elif menu == "📊 Trendyol Satış Analizi (API)":
                         barkod = str(line.get("barcode", "")).strip()
                         urun_adi = line.get("productName", "")[:50]
                         adet = int(line.get("quantity", 1))
-                        fiyat = float(line.get("price", 0.0))
+                        fiyat = float(line.get("price", 0.0) or line.get("amount", 0.0) or 0.0)
                         ciro = adet * fiyat
                         
-                        eslesme = db[db['_db_barkod'] == barkod]
+                        eslesme = db_copy[db_copy['_db_barkod'] == barkod]
                         if len(eslesme) > 0:
                             m_tl = eslesme.iloc[0]['Maliyet (TL)'] * adet
                             kg_tl = eslesme.iloc[0]['Kargo (TL)'] * adet
@@ -748,11 +787,15 @@ elif menu == "📊 Trendyol Satış Analizi (API)":
                 if siparis_detaylari:
                     df_sip = pd.DataFrame(siparis_detaylari)
                     st.session_state["ty_satis_raporu"] = df_sip
-                    st.success("✅ Sipariş analizi başarıyla tamamlandı!")
-                else: st.warning("⚠️ Seçilen tarih aralığında sipariş kaydı bulunamadı.")
-            else: st.warning("⚠️ Trendyol sunucularından sipariş verisi alınamadı veya seçilen tarihte satış yok.")
+                    st.success(f"✅ {len(orders)} sipariş, {len(df_sip)} satır başarıyla çekildi!")
+                else:
+                    st.warning("⚠ Seçilen tarih aralığında sipariş kaydı bulunamadı.")
+                    st.session_state["ty_satis_raporu"] = pd.DataFrame()
+            else:
+                st.warning("⚠ Trendyol sunucularından sipariş verisi alınamadı veya seçilen tarihte satış yok.")
+                st.session_state["ty_satis_raporu"] = pd.DataFrame()
             
-    if "ty_satis_raporu" in st.session_state:
+    if "ty_satis_raporu" in st.session_state and not st.session_state["ty_satis_raporu"].empty:
         df_sip = st.session_state["ty_satis_raporu"]
         
         top_adet = df_sip["Adet"].sum()
@@ -773,7 +816,7 @@ elif menu == "📊 Trendyol Satış Analizi (API)":
         with k4: st.markdown(f'<div class="sales-metric" style="border-left-color: {"#2ECC71" if top_kar>=0 else "#E74C3C"};"><b>Net Kâr:</b><br><span style="font-size:22px; font-weight:bold; color:{"#2ECC71" if top_kar>=0 else "#E74C3C"};">{top_kar:,.2f} TL</span></div>', unsafe_allow_html=True)
         with k5: st.markdown(f'<div class="sales-metric"><b>Ort. Kâr Marjı:</b><br><span style="font-size:22px; font-weight:bold; color:#8E44AD;">% {ort_marj:.2f}</span></div>', unsafe_allow_html=True)
         
-        with st.expander("ℹ️ Masraf Kırılımı Detayını Göster (Maliyet, Kargo ve Komisyon Özetleri)"):
+        with st.expander("ℹ Masraf Kırılımı Detayını Göster (Maliyet, Kargo ve Komisyon Özetleri)"):
             mc1, mc2, mc3 = st.columns(3)
             with mc1: st.info(f"📦 **Ürün Maliyeti Toplamı:** {top_maliyet:,.2f} TL (% {(top_maliyet/top_ciro*100) if top_ciro>0 else 0:.1f})")
             with mc2: st.warning(f"🚚 **Toplam Kargo Gideri:** {top_kargo:,.2f} TL (% {(top_kargo/top_ciro*100) if top_ciro>0 else 0:.1f})")
@@ -854,8 +897,8 @@ elif menu == "📊 Trendyol Satış Analizi (API)":
 # ==========================================
 # SAYFA 6: AYARLAR & API BİLGİLERİ
 # ==========================================
-elif menu == "⚙️ Ayarlar & API":
-    st.markdown('<div class="main-title">⚙️ Mağaza API ve Güvenlik Ayarları</div>', unsafe_allow_html=True)
+elif menu == "⚙ Ayarlar & API":
+    st.markdown('<div class="main-title">⚙ Mağaza API ve Güvenlik Ayarları</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">API bilgilerinizi ve giriş şifrelerinizi buradan yönetebilirsiniz. Bilgiler sadece bilgisayarınızda (yerel) şifresiz olarak saklanır.</div>', unsafe_allow_html=True)
     
     api = load_api_settings()
